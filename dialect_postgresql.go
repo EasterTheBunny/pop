@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	syslog "log"
 	"net"
 	"net/url"
 	"os/exec"
@@ -172,6 +173,7 @@ func (p *postgresql) URL() string {
 	c := p.ConnectionDetails
 
 	if c.GCloudIAMAuthN {
+		syslog.Println("using iam url with db", p.iamURL)
 		return p.iamURL
 	}
 
@@ -188,6 +190,7 @@ func (p *postgresql) urlWithoutDb() string {
 	c := p.ConnectionDetails
 
 	if c.GCloudIAMAuthN {
+		syslog.Println("using iam url without db", p.iamURLAlt)
 		return p.iamURLAlt
 	}
 
@@ -262,6 +265,7 @@ func newPostgreSQL(deets *ConnectionDetails) (dialect, error) {
 // https://pkg.go.dev/github.com/jackc/pgconn?tab=doc#ParseConfig
 // After parsed, they are set to ConnectionDetails instance
 func urlParserPostgreSQL(cd *ConnectionDetails) error {
+	syslog.Println("parsing url", cd.URL)
 	conf, err := pgconn.ParseConfig(cd.URL)
 	if err != nil {
 		return err
@@ -292,6 +296,7 @@ func finalizerPostgreSQL(cd *ConnectionDetails) {
 }
 
 func urlWithConnectorIAMAuthN(cd *ConnectionDetails, withDatabase bool) (string, error) {
+	syslog.Println("creating IAM connector", "withDatabase:", withDatabase)
 	usePrivate := true
 
 	d, err := cloudsqlconn.NewDialer(context.Background(), cloudsqlconn.WithIAMAuthN())

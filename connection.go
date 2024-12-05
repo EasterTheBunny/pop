@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	syslog "log"
 	"math/rand"
 	"strings"
 	"sync/atomic"
@@ -112,6 +113,7 @@ func (c *Connection) Open() error {
 	}
 	details := c.Dialect.Details()
 
+	syslog.Println("opening connection:", c.Dialect.URL())
 	db, err := openPotentiallyInstrumentedConnection(c.Dialect, c.Dialect.URL())
 	if err != nil {
 		return err
@@ -297,7 +299,7 @@ func (c *Connection) timeFunc(name string, fn func() error) error {
 // Connection type, TX.ID, and optionally a copy ID. It makes it easy to trace
 // related queries for a single request.
 //
-//  examples: "conn-7881415437117811350", "tx-4924907692359316530", "tx-831769923571164863-ytzxZa"
+//	examples: "conn-7881415437117811350", "tx-4924907692359316530", "tx-831769923571164863-ytzxZa"
 func (c *Connection) setID(id ...string) {
 	if len(id) == 1 {
 		idElems := strings.Split(id[0], "-")
