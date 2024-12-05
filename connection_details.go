@@ -68,6 +68,8 @@ type ConnectionDetails struct {
 	// It is also recommended to include `instrumentedsql.WithOmitArgs()` which prevents SQL arguments (e.g. passwords)
 	// from being traced or logged.
 	InstrumentedDriverOptions []instrumentedsql.Opt
+	// Rewrites a connection to pass through a Google Cloud IAM federated login
+	GCloudIAMAuthN bool
 }
 
 var dialectX = regexp.MustCompile(`\S+://`)
