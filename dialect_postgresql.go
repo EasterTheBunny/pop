@@ -292,7 +292,7 @@ func finalizerPostgreSQL(cd *ConnectionDetails) {
 }
 
 func urlWithConnectorIAMAuthN(cd *ConnectionDetails, withDatabase bool) (string, error) {
-	var usePrivate bool
+	usePrivate := true
 
 	d, err := cloudsqlconn.NewDialer(context.Background(), cloudsqlconn.WithIAMAuthN())
 	if err != nil {
