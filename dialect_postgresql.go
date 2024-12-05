@@ -40,8 +40,10 @@ var _ dialect = &postgresql{}
 
 type postgresql struct {
 	commonDialect
-	translateCache map[string]string
+	iamURL         string
+	iamURLAlt      string
 	mu             sync.Mutex
+	translateCache map[string]string
 }
 
 func (p *postgresql) Name() string {
@@ -170,12 +172,7 @@ func (p *postgresql) URL() string {
 	c := p.ConnectionDetails
 
 	if c.GCloudIAMAuthN {
-		url, err := urlWithConnectorIAMAuthN(c, false)
-		if err != nil {
-			panic(err)
-		}
-
-		return url
+		return p.iamURL
 	}
 
 	if c.URL != "" {
@@ -191,12 +188,7 @@ func (p *postgresql) urlWithoutDb() string {
 	c := p.ConnectionDetails
 
 	if c.GCloudIAMAuthN {
-		url, err := urlWithConnectorIAMAuthN(c, false)
-		if err != nil {
-			panic(err)
-		}
-
-		return url
+		return p.iamURLAlt
 	}
 
 	// https://github.com/gobuffalo/buffalo/issues/836
@@ -250,6 +242,19 @@ func newPostgreSQL(deets *ConnectionDetails) (dialect, error) {
 		translateCache: map[string]string{},
 		mu:             sync.Mutex{},
 	}
+
+	if deets.GCloudIAMAuthN {
+		var err error
+
+		if cd.iamURL, err = urlWithConnectorIAMAuthN(deets, true); err != nil {
+			return nil, err
+		}
+
+		if cd.iamURLAlt, err = urlWithConnectorIAMAuthN(deets, false); err != nil {
+			return nil, err
+		}
+	}
+
 	return cd, nil
 }
 
