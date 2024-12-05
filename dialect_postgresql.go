@@ -1,21 +1,26 @@
 package pop
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"os/exec"
 	"sync"
 
+	"cloud.google.com/go/cloudsqlconn"
 	"github.com/gobuffalo/fizz"
 	"github.com/gobuffalo/fizz/translators"
+	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/jmoiron/sqlx"
+
 	"github.com/gobuffalo/pop/v6/columns"
 	"github.com/gobuffalo/pop/v6/internal/defaults"
 	"github.com/gobuffalo/pop/v6/logging"
-	"github.com/jackc/pgconn"
-	_ "github.com/jackc/pgx/v4/stdlib" // Load pgx driver
-	"github.com/jmoiron/sqlx"
 )
 
 const namePostgreSQL = "postgres"
@@ -163,20 +168,43 @@ func (p *postgresql) DropDB() error {
 
 func (p *postgresql) URL() string {
 	c := p.ConnectionDetails
+
+	if c.GCloudIAMAuthN {
+		url, err := urlWithConnectorIAMAuthN(c, false)
+		if err != nil {
+			panic(err)
+		}
+
+		return url
+	}
+
 	if c.URL != "" {
 		return c.URL
 	}
+
 	s := "postgres://%s:%s@%s:%s/%s?%s"
+
 	return fmt.Sprintf(s, c.User, url.QueryEscape(c.Password), c.Host, c.Port, c.Database, c.OptionsString(""))
 }
 
 func (p *postgresql) urlWithoutDb() string {
 	c := p.ConnectionDetails
+
+	if c.GCloudIAMAuthN {
+		url, err := urlWithConnectorIAMAuthN(c, false)
+		if err != nil {
+			panic(err)
+		}
+
+		return url
+	}
+
 	// https://github.com/gobuffalo/buffalo/issues/836
 	// If the db is not precised, postgresql takes the username as the database to connect on.
 	// To avoid a connection problem if the user db is not here, we use the default "postgres"
 	// db, just like the other client tools do.
 	s := "postgres://%s:%s@%s:%s/postgres?%s"
+
 	return fmt.Sprintf(s, c.User, url.QueryEscape(c.Password), c.Host, c.Port, c.OptionsString(""))
 }
 
@@ -256,6 +284,38 @@ func urlParserPostgreSQL(cd *ConnectionDetails) error {
 
 func finalizerPostgreSQL(cd *ConnectionDetails) {
 	cd.Port = defaults.String(cd.Port, portPostgreSQL)
+}
+
+func urlWithConnectorIAMAuthN(cd *ConnectionDetails, withDatabase bool) (string, error) {
+	var usePrivate bool
+
+	d, err := cloudsqlconn.NewDialer(context.Background(), cloudsqlconn.WithIAMAuthN())
+	if err != nil {
+		return "", fmt.Errorf("cloudsqlconn.NewDialer: %w", err)
+	}
+
+	var opts []cloudsqlconn.DialOption
+	if usePrivate {
+		opts = append(opts, cloudsqlconn.WithPrivateIP())
+	}
+
+	dsn := fmt.Sprintf("user=%s", cd.User)
+	if withDatabase {
+		dsn = fmt.Sprintf("%s database=%s", dsn, cd.Database)
+	}
+
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return "", err
+	}
+
+	config.DialFunc = func(ctx context.Context, network, instance string) (net.Conn, error) {
+		return d.Dial(ctx, cd.Host, opts...)
+	}
+
+	dbURI := stdlib.RegisterConnConfig(config)
+
+	return dbURI, nil
 }
 
 const pgTruncate = `DO
